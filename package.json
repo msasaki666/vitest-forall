@@ -47,10 +47,5 @@
     "lefthook": "^2.1.9",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "lefthook"
-    ]
   }
 }

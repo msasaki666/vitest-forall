@@ -35,11 +35,18 @@ export type Formula =
 // number は lit ノードへ昇格する。
 export type Termish = Term | number;
 
-const term = (t: Termish): Term => (typeof t === 'number' ? { kind: 'lit', value: t } : t);
-
 export const intVar = (name: string): Term => ({ kind: 'var', name, sort: 'int' });
 export const realVar = (name: string): Term => ({ kind: 'var', name, sort: 'real' });
-export const lit = (value: number): Term => ({ kind: 'lit', value });
+
+// Z3 の Int/Real は非有限値（NaN/Infinity）を表せない。黙って unknown へ化けるのを避け、
+// 構築時に明示エラーで落とす（全域関数化の方針: 想定外を握り潰さない）。
+export const lit = (value: number): Term => {
+  if (!Number.isFinite(value)) throw new Error(`リテラルは有限の数でなければならない: ${value}`);
+  return { kind: 'lit', value };
+};
+
+// 数値の自動昇格も lit() を経由させ、非有限チェックを一元化する。
+const term = (t: Termish): Term => (typeof t === 'number' ? lit(t) : t);
 
 export const add = (left: Termish, right: Termish): Term => ({
   kind: 'add',
@@ -69,6 +76,9 @@ export const ge = cmp('ge');
 export const eq = cmp('eq');
 export const ne = cmp('ne');
 
+// and/or は可変長（モノイドの畳み込みに使えるよう空も許す）。
+// 空の and() は vacuous に true、空の or() は false（恒等元）。制約配列が空になり得る
+// reduce 用途では意図どおりだが、うっかり空で「常に成立(proved)」を生まないよう注意。
 export const and = (...items: Formula[]): Formula => ({ kind: 'and', items });
 export const or = (...items: Formula[]): Formula => ({ kind: 'or', items });
 export const not = (formula: Formula): Formula => ({ kind: 'not', formula });
@@ -78,6 +88,8 @@ export const implies = (ante: Formula, cons: Formula): Formula => ({ kind: 'impl
 // 「∀ P が成立」⇔「¬P が UNSAT」なので、negation には not(P) を変換して渡す（§2 検証の原理）。
 // fallback / timeout は core の VerifySpec にそのまま委譲する。
 export type VarDecls = Record<string, Sort>;
+// 宣言キーごとに Term ハンドルを渡す。値型はソートに依らず一律 Term（sort は型でなく値が運ぶ）。
+// この非対称（キーは型に効く／sort は実行時値）は意図的な割り切り。型でソートまで運ぶのは過剰設計。
 type VarHandles<D extends VarDecls> = { readonly [K in keyof D]: Term };
 
 export function forall<D extends VarDecls>(
@@ -85,8 +97,10 @@ export function forall<D extends VarDecls>(
   predicate: (vars: VarHandles<D>) => Formula,
   options?: Pick<VerifySpec, 'fallback' | 'timeout'>,
 ): VerifySpec {
+  // var ノード生成は検証済みコンストラクタ相当の純粋式に委譲し、as const で kind/sort の
+  // widening を防ぐ（最終的な VarHandles<D> へのキャストは Object.fromEntries の型退化を補うため必要）。
   const vars = Object.fromEntries(
-    Object.entries(decls).map(([name, sort]) => [name, { kind: 'var', name, sort }]),
+    Object.entries(decls).map(([name, sort]) => [name, { kind: 'var', name, sort } as const]),
   ) as VarHandles<D>;
   const property = predicate(vars);
   return {

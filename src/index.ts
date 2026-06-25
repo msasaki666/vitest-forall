@@ -2,6 +2,7 @@
 export { verify } from './verify';
 export {
   evaluate,
+  DEFAULT_TIMEOUT_MS,
   type Verdict,
   type VerifySpec,
   type Fallback,

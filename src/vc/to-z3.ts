@@ -19,6 +19,12 @@ export class NonlinearError extends Error {
   }
 }
 
+// 網羅性の番人。直和型に新メンバを足したのに分岐を書き忘れると、ここでコンパイルエラーになる
+// （`never` に代入不能）。実行時に到達したら IR が壊れているので明示的に落とす（握り潰さない）。
+function assertNever(x: never): never {
+  throw new Error(`網羅されていない IR ノード: ${JSON.stringify(x)}`);
+}
+
 export function toZ3(z: Z3Context, formula: Formula): Bool<'main'> {
   switch (formula.kind) {
     case 'cmp': {
@@ -38,6 +44,8 @@ export function toZ3(z: Z3Context, formula: Formula): Bool<'main'> {
       return z.Not(toZ3(z, formula.formula));
     case 'implies':
       return z.Implies(toZ3(z, formula.ante), toZ3(z, formula.cons));
+    default:
+      return assertNever(formula);
   }
 }
 
@@ -55,6 +63,8 @@ function compare(op: CmpOp, left: Arith<'main'>, right: Arith<'main'>): Bool<'ma
       return left.eq(right);
     case 'ne':
       return left.neq(right);
+    default:
+      return assertNever(op);
   }
 }
 
@@ -81,6 +91,8 @@ function buildTerm(z: Z3Context, t: Term, expected: Sort): Arith<'main'> {
       if (!isConstant(t.left) && !isConstant(t.right)) throw new NonlinearError();
       return buildTerm(z, t.left, expected).mul(buildTerm(z, t.right, expected));
     }
+    default:
+      return assertNever(t);
   }
 }
 
@@ -97,6 +109,8 @@ function isConstant(t: Term): boolean {
     case 'sub':
     case 'mul':
       return isConstant(t.left) && isConstant(t.right);
+    default:
+      return assertNever(t);
   }
 }
 
@@ -114,6 +128,8 @@ function inferSort(t: Term): Sort | undefined {
     case 'sub':
     case 'mul':
       return combineSorts(inferSort(t.left), inferSort(t.right));
+    default:
+      return assertNever(t);
   }
 }
 

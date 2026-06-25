@@ -72,6 +72,13 @@ describe('toZ3: 中間表現 → Z3式（線形算術）', () => {
     expect(v.status).toBe('proved');
   });
 
+  test('リテラルのみの比較でも小数があれば real に揃える', async () => {
+    // gt(2.5, 2): 両辺リテラルだが片方が小数。int 既定のままだと Int/Real 混在で error に劣化する。
+    // 2.5 > 2 は真なので not(...) は UNSAT → proved。
+    const v = await evaluate({ negation: (z) => toZ3(z, not(gt(2.5, 2))) });
+    expect(v.status).toBe('proved');
+  });
+
   test('変数同士の積は NonlinearError を投げる（線形限定の境界）', async () => {
     const z = await getZ3Context();
     const a = intVar('a');

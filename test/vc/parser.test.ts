@@ -8,6 +8,7 @@ import {
   implies,
   intVar,
   le,
+  lit,
   lt,
   mul,
   ne,
@@ -50,6 +51,14 @@ describe('述語DSL: 中間表現(IR)の構築', () => {
     expect(le(a, 9)).toEqual({ kind: 'cmp', op: 'le', left: a, right: { kind: 'lit', value: 9 } });
     expect(eq(a, 5)).toEqual({ kind: 'cmp', op: 'eq', left: a, right: { kind: 'lit', value: 5 } });
     expect(ne(a, 5)).toEqual({ kind: 'cmp', op: 'ne', left: a, right: { kind: 'lit', value: 5 } });
+  });
+
+  test('非有限な数値（NaN / Infinity）はリテラル構築時に弾く', () => {
+    // Z3 の Int/Real は非有限値を表せない。黙って unknown 化させず、構築時に明示エラーで落とす。
+    expect(() => lit(Number.NaN)).toThrow();
+    expect(() => lit(Number.POSITIVE_INFINITY)).toThrow();
+    // 数値の自動昇格経路（項位置）でも同様に弾く。
+    expect(() => add(intVar('a'), Number.NaN)).toThrow();
   });
 
   test('論理結合 and / or は items 配列、not / implies は専用形を作る', () => {
