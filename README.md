@@ -73,12 +73,39 @@ verify('classify: 出力は low/mid/high のいずれか', {
   → 反例が存在: (define-fun balance () Int 0) (define-fun amount () Int 1) ...
 ```
 
+## 述語 DSL（`forall`）
+
+生の `z.Int.const(...)` を組む代わりに、**TS 式に近い述語**を `forall` で書くと、それを Z3 式へ
+機械変換できます（線形算術・整数/実数・比較・論理結合に限定）。性質の否定は `forall` が内部で行うため、
+利用者は「成り立ってほしい性質」をそのまま書けます。
+
+```ts
+import { verify, forall, and, ge, le, sub, implies } from 'vitest-forall';
+
+// ∀ balance, amount: int. (balance≥0 ∧ amount≥0 ∧ amount≤balance) → balance - amount ≥ 0
+verify(
+  '残高は出金後も負にならない',
+  forall({ balance: 'int', amount: 'int' }, ({ balance, amount }) =>
+    implies(
+      and(ge(balance, 0), ge(amount, 0), le(amount, balance)),
+      ge(sub(balance, amount), 0),
+    ),
+  ),
+);
+```
+
+コンビネータ: 変数 `intVar` / `realVar`、算術 `add` / `sub` / `mul`（定数倍のみ）/ `neg`、
+比較 `lt` / `le` / `gt` / `ge` / `eq` / `ne`、論理 `and` / `or` / `not` / `implies`。
+項位置の数値はリテラルへ自動昇格します（`add(balance, 100)`）。
+**変数同士の積**は線形算術の対象外で、`unknown` 扱い → fast-check へ降格します（`fallback` 指定時）。
+
 ## API
 
 | API | 説明 |
 |---|---|
 | `verify(name, spec)` | `spec` を Z3 で検証し Vitest の `test` として登録する薄い殻 |
 | `evaluate(spec)` | ★純粋関数。判定を `Verdict` 値で返す。Vitest 非依存（テストの核） |
+| `forall(decls, predicate, opts?)` | 述語 DSL で性質を書き `VerifySpec` を組む（否定は内部で行う） |
 | `int({ ge, le, ne })` / `real(...)` | fallback 用の制約付き fast-check arbitrary |
 
 ### `VerifySpec`
@@ -120,7 +147,7 @@ const verdict = await evaluate({
 
 - **得意**: 線形算術・整数/実数・比較・論理結合。
 - **苦手（→ `unknown` で fast-check へ降格）**: 非線形（変数同士の乗算）・複雑な文字列制約・ループ。
-- **数値**: JS の `number` は IEEE double。境界値は VC 生成層（Phase B）で吸収予定。
+- **数値**: JS の `number` は IEEE double。`forall` のリテラルは整数/実数のソートに合わせて生成する。
 - **タイムアウト**: Z3 は最悪ケースで指数的に遅い。`timeout` の設定を推奨。
 
 ## 開発
