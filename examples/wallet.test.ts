@@ -1,7 +1,7 @@
 import { test, expect } from 'vitest';
 import fc from 'fast-check';
 import { withdraw, classify } from './wallet';
-import { verify, int, forall, and, ge, le, sub, implies } from '../src/index';
+import { verify, int, forall, and, ge, le, mul, sub, implies } from '../src/index';
 
 // ∃（test）と ∀（verify）が同一ランナー・同一レポートに並ぶことを示すサンプル（設計書 §0・§6）。
 
@@ -49,6 +49,15 @@ verify(
       and(ge(balance, 0), ge(amount, 0), le(amount, balance)),
       ge(sub(balance, amount), 0),
     ),
+  ),
+);
+
+// Phase B（§9-9）: 非線形（変数同士の積）は Z3 が unknown を返す。fallback を書かなくても
+// forall は IR から ∃ 検証を自動合成し、fast-check の例示へ降格する。前件 x,y≥0 は生成範囲にも反映される。
+verify(
+  '非負どうしの積は非負（非線形 → 自動 ∃ 降格）',
+  forall({ x: 'int', y: 'int' }, ({ x, y }) =>
+    implies(and(ge(x, 0), ge(y, 0)), ge(mul(x, y), 0)),
   ),
 );
 

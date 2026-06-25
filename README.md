@@ -97,7 +97,25 @@ verify(
 コンビネータ: 変数 `intVar` / `realVar`、算術 `add` / `sub` / `mul`（定数倍のみ）/ `neg`、
 比較 `lt` / `le` / `gt` / `ge` / `eq` / `ne`、論理 `and` / `or` / `not` / `implies`。
 項位置の数値はリテラルへ自動昇格します（`add(balance, 100)`）。
-**変数同士の積**は線形算術の対象外で、`unknown` 扱い → fast-check へ降格します（`fallback` 指定時）。
+
+### 非線形は自動で ∃ へ降格する
+
+**変数同士の積**などは線形算術の対象外で Z3 は `unknown` を返します。`forall` で書いた性質は、
+`fallback` を明示しなくても **IR から fast-check の ∃ 検証を自動合成**して降格します。`implies` の
+前件（事前条件）に書いた範囲（`ge` / `le` / `eq` / `ne`）は生成する arbitrary にも反映され、探索が
+前件領域に集中します。明示的に `fallback` を渡した場合は、そちらが自動合成より優先されます。
+
+```ts
+import { verify, forall, and, ge, mul, implies } from 'vitest-forall';
+
+// ∀ x, y: int. (x≥0 ∧ y≥0) → x*y ≥ 0 ── x*y は非線形 → Z3 unknown → 自動で fast-check へ降格
+verify(
+  '非負どうしの積は非負',
+  forall({ x: 'int', y: 'int' }, ({ x, y }) =>
+    implies(and(ge(x, 0), ge(y, 0)), ge(mul(x, y), 0)),
+  ),
+);
+```
 
 ## API
 
