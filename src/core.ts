@@ -1,7 +1,93 @@
-// ★ evaluate(): 純粋判定関数。Vitest 非依存。判定結果を Verdict 値で返す（設計書 §4・§6）。
-// scaffold 段階のスタブ。Phase A で実装する。
+// ★ evaluate(): ∀検証の純粋判定関数。Vitest 非依存（設計書 §4・§6）。
+//
+// 検証の原理: 「性質 P を ∀ で証明したい」⇔「¬P が UNSAT であることを示す」。
+// SAT が返ればその model が反例の具体値。判定不能（unknown）は fast-check の ∃ 検証へ降格する。
+//
+// 想定外（式構築の例外・判定不能）は throw せず Verdict 値に畳み込んで返す（全域関数化、設計書 §4-1）。
+// Solver/Model/fc.assert といった命令的・副作用的コードはこの関数のローカルに閉じ込め、
+// 外には Verdict だけを出す。ローカルな可変は外から観測できないので純粋とみなす（設計書 割り切り）。
+import fc from 'fast-check';
+import type { Bool, CheckSatResult, Model } from 'z3-solver';
+import { getZ3Context, type Z3Context } from './z3-context';
+
 export type Verdict =
-  | { status: 'proved' }
-  | { status: 'refuted'; counterexample: string }
-  | { status: 'fallback-passed' }
-  | { status: 'error'; reason: string };
+  | { status: 'proved' } // ¬P が UNSAT → ∀ 成立
+  | { status: 'refuted'; counterexample: string } // SAT / ∃ 失敗 → 反例あり
+  | { status: 'fallback-passed' } // unknown → fast-check で例示 OK
+  | { status: 'error'; reason: string }; // unknown かつ fallback 未指定
+
+// fallback の arbitrary は 1 個以上の非空タプル。空配列を fc.property に渡すと
+// 実行時エラーになる（設計書 §7 脚注）ため、型でも非空を要求して呼び出し側のミスを防ぐ。
+export type ArbitraryTuple = readonly [fc.Arbitrary<unknown>, ...fc.Arbitrary<unknown>[]];
+
+// arbitrary タプルから prop の引数型を導く（[fc.integer()] → [number] など）。
+type ArbitraryValues<T extends ArbitraryTuple> = {
+  [K in keyof T]: T[K] extends fc.Arbitrary<infer V> ? V : never;
+};
+
+export type Fallback<T extends ArbitraryTuple = ArbitraryTuple> = {
+  arb: T;
+  prop: (...xs: ArbitraryValues<T>) => boolean;
+};
+
+export type VerifySpec<T extends ArbitraryTuple = ArbitraryTuple> = {
+  negation: (z: Z3Context) => Bool<'main'>; // 性質の否定（UNSAT なら ∀ 成立）
+  fallback?: Fallback<T>;
+  timeout?: number; // Z3 タイムアウト(ms)。最悪ケースで指数的に遅いため CI 安定化に必須級（設計書 §8）。
+};
+
+export async function evaluate<T extends ArbitraryTuple = ArbitraryTuple>(
+  spec: VerifySpec<T>,
+): Promise<Verdict> {
+  const z = await getZ3Context();
+
+  // 式構築〜check〜model 取得までを 1 つの try に収める。
+  // どこで失敗しても「判定不能（unknown）」へ畳み、握り潰さず後段で扱う。
+  let outcome: { result: CheckSatResult; counterexample?: string };
+  try {
+    const solver = new z.Solver();
+    if (spec.timeout !== undefined) solver.set('timeout', spec.timeout);
+    solver.add(spec.negation(z));
+    const result = await solver.check();
+    outcome = {
+      result,
+      counterexample: result === 'sat' ? formatModel(solver.model()) : undefined,
+    };
+  } catch {
+    outcome = { result: 'unknown' };
+  }
+
+  if (outcome.result === 'unsat') return { status: 'proved' };
+  if (outcome.result === 'sat') {
+    return { status: 'refuted', counterexample: outcome.counterexample ?? '' };
+  }
+
+  // unknown: fallback があれば ∃ 検証へ降格、なければ設定ミスとして error。
+  if (spec.fallback !== undefined) return runFallback(spec.fallback);
+  return {
+    status: 'error',
+    reason: 'Z3 が unknown を返したが fallback が未指定（∃ 検証で埋められない）',
+  };
+}
+
+// model は SMTLIB 形式（"(define-fun balance () Int\n  0)..."）。
+// 空白を畳んで 1 行に整形し、レポートで読みやすくする。
+function formatModel(model: Model<'main'>): string {
+  return model.toString().replace(/\s+/g, ' ').trim();
+}
+
+function runFallback<T extends ArbitraryTuple>(fallback: Fallback<T>): Verdict {
+  try {
+    // fast-check の property は arbitrary をタプルで厳密に型付けするが、ここでは
+    // 実行時に決まる可変長 arbitrary を扱うため、境界でのみ型を緩める（局所的キャスト）。
+    const predicate = fallback.prop as (...xs: unknown[]) => boolean;
+    const build = fc.property as (...args: unknown[]) => fc.IPropertyWithHooks<unknown[]>;
+    fc.assert(build(...fallback.arb, predicate));
+    return { status: 'fallback-passed' };
+  } catch (e) {
+    return {
+      status: 'refuted',
+      counterexample: e instanceof Error ? e.message : String(e),
+    };
+  }
+}

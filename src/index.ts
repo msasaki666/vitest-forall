@@ -1,3 +1,11 @@
-// 公開エクスポート（verify, evaluate, 制約付き arbitrary など）。
-// scaffold 段階。Phase A の本実装でここから verify/evaluate を再エクスポートする（設計書 §5）。
-export {};
+// 公開エクスポート（設計書 §5）。利用者はこのエントリだけを import すればよい。
+export { verify } from './verify';
+export {
+  evaluate,
+  type Verdict,
+  type VerifySpec,
+  type Fallback,
+  type ArbitraryTuple,
+} from './core';
+export { int, real, type NumericConstraints } from './arbitraries';
+export { getZ3Context, type Z3Context } from './z3-context';
