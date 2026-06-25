@@ -1,0 +1,44 @@
+{
+  "name": "vitest-forall",
+  "version": "0.0.0",
+  "description": "Vitest 上で ∀検証（Z3形式検証）を ∃検証（fast-check）と同じテストレイヤーに統合するライブラリ",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "vitest",
+    "z3",
+    "smt",
+    "formal-verification",
+    "property-testing"
+  ],
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "verify": "pnpm run typecheck && pnpm run test",
+    "prepare": "lefthook install"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "fast-check": "^4.8.0",
+    "z3-solver": "^4.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "lefthook": "^2.1.9",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "lefthook"
+    ]
+  }
+}
