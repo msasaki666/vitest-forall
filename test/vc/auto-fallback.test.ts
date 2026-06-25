@@ -3,6 +3,7 @@ import fc from 'fast-check';
 import {
   add,
   and,
+  eq,
   ge,
   gt,
   implies,
@@ -12,6 +13,7 @@ import {
   mul,
   ne,
   or,
+  type Sort,
 } from '../../src/vc/parser';
 import { buildAutoFallback, inferConstraints } from '../../src/vc/auto-fallback';
 
@@ -98,5 +100,58 @@ describe('buildAutoFallback: IR から Fallback を合成する', () => {
         return n >= 0 && n <= 10;
       }),
     );
+  });
+});
+
+describe('堅牢性: プロトタイプ汚染と充足不能区間', () => {
+  test('__proto__ という変数名でも prop は実数値で評価する（偽の反例を作らない）', () => {
+    // env を素の {} で組むと env['__proto__']=v が握り潰され、評価が NaN 化して全 false になる。
+    // すると 0*0≥0 のような真の性質まで「反例あり」と誤判定する。これを防ぐ。
+    // 本物の own キー '__proto__' を持つ decls を組む（object リテラルの `__proto__:` は
+    // プロトタイプ設定構文で own キーにならないため defineProperty で明示的に置く）。
+    const decls: Record<string, Sort> = { x: 'int' };
+    Object.defineProperty(decls, '__proto__', { value: 'int', enumerable: true });
+    const fallback = buildAutoFallback(decls, ge(mul(intVar('__proto__'), intVar('x')), 0));
+    expect(fallback).toBeDefined();
+    if (!fallback) return;
+    const prop = fallback.prop as (...xs: number[]) => boolean;
+    expect(prop(0, 0)).toBe(true); // 0*0 ≥ 0 は真。NaN 化して false を返してはいけない
+    expect(prop(2, 3)).toBe(true);
+    expect(prop(1, -1)).toBe(false); // 1*-1 = -1 は本物の反例
+  });
+
+  test('constructor という変数名でも正しく評価する', () => {
+    const decls: Record<string, Sort> = {};
+    decls['constructor'] = 'int';
+    const fallback = buildAutoFallback(decls, ge(intVar('constructor'), 0));
+    expect(fallback).toBeDefined();
+    if (!fallback) return;
+    const prop = fallback.prop as (...xs: number[]) => boolean;
+    expect(prop(5)).toBe(true);
+    expect(prop(-1)).toBe(false);
+  });
+
+  test('__proto__ を含む前件は推論結果のプロトタイプを書き換えない', () => {
+    const c = inferConstraints(
+      implies(and(ge(intVar('__proto__'), 5), le(intVar('__proto__'), 9)), gt(intVar('a'), 0)),
+    );
+    expect(Object.getPrototypeOf(c)).toBeNull(); // プロトタイプ汚染が起きていない
+    expect(c['a']).toBeUndefined(); // 無関係な a に範囲が漏れない
+  });
+
+  test('充足不能な区間（下限 > 上限）は制約を落として全域生成へ戻す', () => {
+    // implies(5≤a≤3, …) は前件が偽 → 空虚に真。空の arbitrary を作って例外を投げてはいけない。
+    const a = intVar('a');
+    const property = implies(and(ge(a, 5), le(a, 3)), gt(a, -100));
+    expect(inferConstraints(property)['a']).toBeUndefined();
+    expect(() => buildAutoFallback({ a: 'int' }, property)).not.toThrow();
+  });
+
+  test('eq と ne が同じ値で衝突する区間も落とす（空 arbitrary 回避）', () => {
+    // eq(a,5) → [5,5]、ne(a,5) で 5 を除外 → 生成可能値ゼロ。前件は充足不能 → 空虚に真。
+    const a = intVar('a');
+    const property = implies(and(eq(a, 5), ne(a, 5)), gt(a, -100));
+    expect(inferConstraints(property)['a']).toBeUndefined();
+    expect(() => buildAutoFallback({ a: 'int' }, property)).not.toThrow();
   });
 });

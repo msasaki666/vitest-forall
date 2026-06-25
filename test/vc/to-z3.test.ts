@@ -131,6 +131,16 @@ describe('forall: ∀ DSL から VerifySpec を組む', () => {
     expect(v.status).toBe('refuted');
   });
 
+  test('矛盾した前件を持つ非線形 forall は例外を投げず fallback-passed（空虚に真）', async () => {
+    // implies(5≤a≤3, a*b≥0)。前件が充足不能なので性質は空虚に真。
+    // 推論が空区間を作っても forall 構築時に fc が例外で落ちず、∃ 降格で fallback-passed。
+    const spec = forall({ a: 'int', b: 'int' }, ({ a, b }) =>
+      implies(and(ge(a, 5), le(a, 3)), ge(mul(a, b), 0)),
+    );
+    const v = await evaluate(spec);
+    expect(v.status).toBe('fallback-passed');
+  });
+
   test('明示した fallback は自動合成より優先される', async () => {
     // 自動合成なら反例が出る性質でも、利用者が prop:()=>true の fallback を渡せばそれを使う。
     const spec = forall({ a: 'int', b: 'int' }, ({ a, b }) => ge(mul(a, b), 0), {

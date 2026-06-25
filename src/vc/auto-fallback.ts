@@ -17,14 +17,27 @@ import type { CmpOp, Formula, Term, VarDecls } from './parser';
 // 変数名 → 推論した数値制約。前件に現れなかった変数は欠落（＝全域生成）。
 export type InferredConstraints = Readonly<Record<string, NumericConstraints>>;
 
+// 網羅性の番人。CmpOp/Term に新メンバを足して分岐を書き忘れると never 代入不能でコンパイルエラー。
+function assertNever(x: never): never {
+  throw new Error(`網羅されていない IR ノード: ${JSON.stringify(x)}`);
+}
+
 // 性質から前件領域の制約を推論する。implies のときだけ前件を事前条件とみなす
 // （単独の性質に「前件」は無く、無制約で探索するのが正しい）。
 export function inferConstraints(property: Formula): InferredConstraints {
-  if (property.kind !== 'implies') return {};
-  const acc: Record<string, NumericConstraints> = {};
+  // 蓄積器は null プロトタイプにする。利用者の変数名がそのままキーになるため、素の {} だと
+  // `acc['__proto__'] = ...` がプロトタイプを書き換え、無関係な変数の推論まで汚染しうる。
+  const acc: Record<string, NumericConstraints> = Object.create(null);
+  if (property.kind !== 'implies') return acc;
   for (const atom of flattenAnd(property.ante)) {
     const bound = atomBound(atom);
     if (bound) mergeBound(acc, bound);
+  }
+  // 充足不能な区間（下限>上限、単一点を ne で除外）は前件が偽 → 性質は空虚に真。
+  // 制約を落として全域生成へ戻す（空の arbitrary を作って fc を例外で落とさないため）。
+  for (const name of Object.keys(acc)) {
+    const c = acc[name];
+    if (c && isUnsatisfiable(c)) delete acc[name];
   }
   return acc;
 }
@@ -43,7 +56,9 @@ export function buildAutoFallback(decls: VarDecls, property: Formula): Fallback 
   // fast-check が生成した値タプルを名前付き環境へ束ね、IR を評価して真偽を返す。
   // 反例（false）が出れば evaluate 側が refuted に畳む。
   const prop = (...values: number[]): boolean => {
-    const env: Record<string, number> = {};
+    // 利用者の変数名がそのままキーになる。素の {} だと env['__proto__']=v が握り潰され
+    // 評価が NaN 化して偽の反例を生む。null プロトタイプで継承プロパティの混入を断つ。
+    const env: Record<string, number> = Object.create(null);
     entries.forEach(([name], i) => {
       const value = values[i];
       if (value === undefined) throw new Error(`fallback prop の引数 ${name} が不足している`);
@@ -93,7 +108,9 @@ function atomBound(atom: Formula): Bound | undefined {
     case 'ne':
       return { name, ne: value };
     default:
-      return undefined;
+      // 既知の CmpOp はすべて上で処理済み。default は将来 CmpOp が増えたとき
+      // 「境界化できない」として安全に捨てる意図的な受け皿（無制約＝広い側に倒す）。
+      return assertNever(op);
   }
 }
 
@@ -130,6 +147,8 @@ function flipOp(op: CmpOp): CmpOp {
       return 'eq';
     case 'ne':
       return 'ne';
+    default:
+      return assertNever(op);
   }
 }
 
@@ -152,6 +171,8 @@ function constValue(term: Term): number | undefined {
       if (l === undefined || r === undefined) return undefined;
       return term.kind === 'add' ? l + r : term.kind === 'sub' ? l - r : l * r;
     }
+    default:
+      return assertNever(term);
   }
 }
 
@@ -167,4 +188,14 @@ function mergeBound(acc: Record<string, NumericConstraints>, b: Bound): void {
     else if (cur.ne !== b.ne) delete next.ne; // 競合する除外値は表現できない → 落とす（安全側）
   }
   acc[b.name] = next;
+}
+
+// 生成可能値がゼロになる（充足不能な）区間か。下限>上限、または単一点をその点の ne で除外した形。
+// 充足不能な前件は性質を空虚に真にするだけなので、この制約は捨てて全域生成へ戻す（§安全側）。
+function isUnsatisfiable(c: NumericConstraints): boolean {
+  if (c.ge !== undefined && c.le !== undefined) {
+    if (c.ge > c.le) return true; // 下限 > 上限 → 空
+    if (c.ge === c.le && c.ne === c.ge) return true; // 単一点が除外されている → 空
+  }
+  return false;
 }

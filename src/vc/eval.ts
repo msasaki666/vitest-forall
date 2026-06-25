@@ -19,6 +19,12 @@ function assertNever(x: never): never {
 export function evalTerm(term: Term, env: Env): number {
   switch (term.kind) {
     case 'var': {
+      // env は呼び出し側が任意のキー（利用者の変数名）で組む。素の {} だと env['__proto__'] は
+      // Object.prototype を返し undefined チェックをすり抜ける。own プロパティだけを見て、
+      // 継承値を変数の値と誤読しない（プロトタイプ汚染で偽の反例を出さないため）。
+      if (!Object.prototype.hasOwnProperty.call(env, term.name)) {
+        throw new Error(`環境に変数 ${term.name} がない`);
+      }
       const value = env[term.name];
       if (value === undefined) throw new Error(`環境に変数 ${term.name} がない`);
       return value;

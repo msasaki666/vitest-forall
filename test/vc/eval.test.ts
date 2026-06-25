@@ -43,6 +43,13 @@ describe('evalTerm: 数値項を環境で評価する', () => {
   test('環境に無い変数はエラーで落とす（握り潰さない）', () => {
     expect(() => evalTerm(intVar('missing'), {})).toThrow();
   });
+
+  test('継承プロパティ（__proto__ / constructor）は変数値として読まない', () => {
+    // env を素の {} で組むと env['__proto__'] は Object.prototype を返す（undefined でない）。
+    // own プロパティだけを見て、継承値を「変数の値」と誤読しないこと（プロトタイプ汚染対策）。
+    expect(() => evalTerm(intVar('__proto__'), {})).toThrow();
+    expect(() => evalTerm(intVar('constructor'), {})).toThrow();
+  });
 });
 
 describe('evalFormula: 真偽式を環境で評価する', () => {
