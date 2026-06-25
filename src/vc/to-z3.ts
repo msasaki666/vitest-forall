@@ -23,8 +23,9 @@ export function toZ3(z: Z3Context, formula: Formula): Bool<'main'> {
   switch (formula.kind) {
     case 'cmp': {
       // 比較の両辺は同じソートで構築する。リテラルはソートを持たない（多相）ため、
-      // 変数側から推論したソートに合わせる。両辺ともリテラルなら int を既定とする。
-      const sort = inferSort(formula.left) ?? inferSort(formula.right) ?? 'int';
+      // 変数側から推論したソートに合わせる。一方でも real なら real に揃える（int は ToReal で持ち上がる）。
+      // 両辺ともリテラルなら int を既定とする。
+      const sort = combineSorts(inferSort(formula.left), inferSort(formula.right)) ?? 'int';
       const left = buildTerm(z, formula.left, sort);
       const right = buildTerm(z, formula.right, sort);
       return compare(formula.op, left, right);
@@ -100,6 +101,7 @@ function isConstant(t: Term): boolean {
 }
 
 // 項のソートを推論する。リテラルは多相なので undefined（呼び出し側で既定を補う）。
+// 部分項に real が一つでもあれば real に揃える（混在は real へ持ち上げるのが線形算術として安全）。
 function inferSort(t: Term): Sort | undefined {
   switch (t.kind) {
     case 'var':
@@ -111,6 +113,13 @@ function inferSort(t: Term): Sort | undefined {
     case 'add':
     case 'sub':
     case 'mul':
-      return inferSort(t.left) ?? inferSort(t.right);
+      return combineSorts(inferSort(t.left), inferSort(t.right));
   }
+}
+
+// 2 項のソートを統合する。一方でも real なら real（int は ToReal で持ち上がる）。
+// 双方 int なら int、双方未確定（リテラルのみ）なら undefined を返す。
+function combineSorts(a: Sort | undefined, b: Sort | undefined): Sort | undefined {
+  if (a === 'real' || b === 'real') return 'real';
+  return a ?? b;
 }

@@ -62,6 +62,16 @@ describe('toZ3: 中間表現 → Z3式（線形算術）', () => {
     expect(v.status).toBe('proved');
   });
 
+  test('int と real が混在する項は real ソートへ持ち上げて扱える', async () => {
+    // ∀ i:int, x:real. x>=0 → i + x >= i
+    // add(int, real) のように int 項が先に来ても real に揃え、Int/Real 混在で error に劣化させない。
+    const i = intVar('i');
+    const x = realVar('x');
+    const p = implies(ge(x, 0), ge(add(i, x), i));
+    const v = await evaluate({ negation: (z) => toZ3(z, not(p)) });
+    expect(v.status).toBe('proved');
+  });
+
   test('変数同士の積は NonlinearError を投げる（線形限定の境界）', async () => {
     const z = await getZ3Context();
     const a = intVar('a');
