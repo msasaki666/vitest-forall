@@ -21,10 +21,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "verify": "pnpm run typecheck && pnpm run test",
-    "prepare": "simple-git-hooks"
-  },
-  "simple-git-hooks": {
-    "pre-push": "pnpm run verify"
+    "prepare": "lefthook install"
   },
   "engines": {
     "node": ">=24"
@@ -35,8 +32,13 @@
   },
   "devDependencies": {
     "@types/node": "^26.0.1",
-    "simple-git-hooks": "^2.13.1",
+    "lefthook": "^2.1.9",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "lefthook"
+    ]
   }
 }

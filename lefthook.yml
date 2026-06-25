@@ -1,0 +1,9 @@
+# lefthook で git hook を管理する。CI は持たず、品質ゲートを hook に寄せる方針（設計書方針）。
+# 重い Z3 テストは push 前にだけ回す。
+pre-push:
+  parallel: false
+  commands:
+    typecheck:
+      run: pnpm run typecheck
+    test:
+      run: pnpm run test
