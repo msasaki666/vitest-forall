@@ -1,0 +1,4 @@
+# pnpm 11 以降、依存のビルドスクリプト許可は package.json の "pnpm" フィールドではなく
+# ここで設定する（旧 pnpm.onlyBuiltDependencies の移設先）。lefthook の git hook 装着に必要。
+allowBuilds:
+  lefthook: true
