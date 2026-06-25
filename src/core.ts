@@ -36,6 +36,10 @@ export type VerifySpec<T extends ArbitraryTuple = ArbitraryTuple> = {
   timeout?: number; // Z3 タイムアウト(ms)。最悪ケースで指数的に遅いため CI 安定化に必須級（設計書 §8）。
 };
 
+// timeout 未指定でも Z3 を無制限に走らせない既定値。設計書 §8 が「必須級」と言う以上、
+// 既定でガードしてハングを防ぐ（タイムアウト時 Z3 は unknown を返し、fallback/error へ穏当に降格する）。
+export const DEFAULT_TIMEOUT_MS = 10_000;
+
 export async function evaluate<T extends ArbitraryTuple = ArbitraryTuple>(
   spec: VerifySpec<T>,
 ): Promise<Verdict> {
@@ -46,7 +50,7 @@ export async function evaluate<T extends ArbitraryTuple = ArbitraryTuple>(
   let outcome: { result: CheckSatResult; counterexample?: string };
   try {
     const solver = new z.Solver();
-    if (spec.timeout !== undefined) solver.set('timeout', spec.timeout);
+    solver.set('timeout', spec.timeout ?? DEFAULT_TIMEOUT_MS);
     solver.add(spec.negation(z));
     const result = await solver.check();
     outcome = {
