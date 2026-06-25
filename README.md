@@ -123,8 +123,9 @@ verify(
 |---|---|
 | `verify(name, spec)` | `spec` を Z3 で検証し Vitest の `test` として登録する薄い殻 |
 | `evaluate(spec)` | ★純粋関数。判定を `Verdict` 値で返す。Vitest 非依存（テストの核） |
-| `forall(decls, predicate, opts?)` | 述語 DSL で性質を書き `VerifySpec` を組む（否定は内部で行う） |
+| `forall(decls, predicate, opts?)` | 述語 DSL で性質を書き `VerifySpec` を組む（否定は内部で行う。`unknown` 時は fast-check へ自動降格） |
 | `int({ ge, le, ne })` / `real(...)` | fallback 用の制約付き fast-check arbitrary |
+| `DEFAULT_TIMEOUT_MS` | `timeout` 未指定時に使う既定の Z3 タイムアウト（`10_000` ms） |
 
 ### `VerifySpec`
 
@@ -132,7 +133,7 @@ verify(
 |---|---|---|
 | `negation` | `(z) => Bool` | 性質の **否定**。UNSAT なら ∀ 成立 |
 | `fallback?` | `{ arb, prop }` | `unknown` 時に走らせる fast-check の ∃ 検証 |
-| `timeout?` | `number` | Z3 タイムアウト(ms)。CI 安定化に推奨 |
+| `timeout?` | `number` | Z3 タイムアウト(ms)。未指定でも既定 `10_000` ms が効く（ハング防止）。CI では対象に応じて調整 |
 
 ### `Verdict`（`evaluate` の戻り値）
 
@@ -141,7 +142,7 @@ verify(
 | `proved` | ¬P が UNSAT → ∀ 成立 |
 | `refuted` | SAT / ∃ 失敗 → `counterexample` あり |
 | `fallback-passed` | unknown → fast-check で例示 OK |
-| `error` | unknown かつ `fallback` 未指定 |
+| `error` | unknown かつ `fallback` 未指定（`forall` は変数があれば自動合成するので通常ここに落ちない） |
 
 ## Vitest 非依存で使う（`/core` サブパス）
 
@@ -166,7 +167,7 @@ const verdict = await evaluate({
 - **得意**: 線形算術・整数/実数・比較・論理結合。
 - **苦手（→ `unknown` で fast-check へ降格）**: 非線形（変数同士の乗算）・複雑な文字列制約・ループ。
 - **数値**: JS の `number` は IEEE double。`forall` のリテラルは整数/実数のソートに合わせて生成する。
-- **タイムアウト**: Z3 は最悪ケースで指数的に遅い。`timeout` の設定を推奨。
+- **タイムアウト**: Z3 は最悪ケースで指数的に遅い。既定で `10_000` ms（`DEFAULT_TIMEOUT_MS`）が効き、超過すると `unknown` 扱いで fast-check へ降格する。重い検証は `timeout` で調整。
 
 ## 開発
 
