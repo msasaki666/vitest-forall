@@ -21,6 +21,9 @@ pnpm add -D vitest
 pnpm add z3-solver fast-check
 ```
 
+`vitest` は **peerDependency**（任意）です。`verify()` を使うには Vitest が必要ですが、
+純粋関数 `evaluate()` だけを使うなら Vitest なしでも動きます（下記「Vitest 非依存で使う」参照）。
+
 ## 使い方
 
 ```ts
@@ -94,6 +97,24 @@ verify('classify: 出力は low/mid/high のいずれか', {
 | `refuted` | SAT / ∃ 失敗 → `counterexample` あり |
 | `fallback-passed` | unknown → fast-check で例示 OK |
 | `error` | unknown かつ `fallback` 未指定 |
+
+## Vitest 非依存で使う（`/core` サブパス）
+
+`evaluate()` は判定を `Verdict` 値で返す純粋関数で、Vitest に依存しません。
+ルートエントリ（`vitest-forall`）は `verify()` 経由で `vitest` を読み込むため、
+Vitest を入れずにコアだけ使いたい場合は **`vitest-forall/core`** から import します。
+
+```ts
+import { evaluate } from 'vitest-forall/core'; // vitest を一切読み込まない
+
+const verdict = await evaluate({
+  negation: (z) => {
+    const b = z.Int.const('b');
+    return z.And(b.neq(0), b.eq(0));
+  },
+});
+// verdict.status === 'proved'
+```
 
 ## 得意領域と制約
 
