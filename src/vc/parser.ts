@@ -8,6 +8,7 @@
 // 線形算術・整数/実数・比較・論理結合に対象を限定する（§8 得意領域）。非線形などの変換可否は
 // to-z3.ts が担い、ここは純粋なデータ構築に徹する（副作用なし）。
 import type { VerifySpec } from '../core';
+import { buildAutoFallback } from './auto-fallback';
 import { toZ3 } from './to-z3';
 
 export type Sort = 'int' | 'real';
@@ -103,8 +104,12 @@ export function forall<D extends VarDecls>(
     Object.entries(decls).map(([name, sort]) => [name, { kind: 'var', name, sort } as const]),
   ) as VarHandles<D>;
   const property = predicate(vars);
+  // unknown（非線形など to-z3 が拒否する領域）へ落ちたとき、利用者が fallback を書いていなければ
+  // IR から ∃ 検証を自動合成して降格させる（設計書 §8・§9-9）。明示指定があればそれを優先する。
+  const fallback = options?.fallback ?? buildAutoFallback(decls, property);
   return {
     negation: (z) => toZ3(z, not(property)),
     ...options,
+    fallback,
   };
 }
