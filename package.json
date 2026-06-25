@@ -27,7 +27,7 @@
     "pre-push": "pnpm run verify"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=24"
   },
   "dependencies": {
     "fast-check": "^4.8.0",
