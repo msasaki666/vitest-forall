@@ -1,6 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2022",
+    // tsup の dts 生成（rollup-plugin-dts）が baseUrl を内部注入し、TS6.0 がそれを非推奨エラーにする。
+    // ここで明示的に許容して型定義ビルドを通す（実害なし）。TS7.0 へ上げる際に見直す。
+    "ignoreDeprecations": "6.0",
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "lib": ["ES2022"],

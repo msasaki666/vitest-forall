@@ -17,7 +17,8 @@
 ## コマンド
 
 ```bash
-pnpm install      # 依存導入。lefthook の git hook も自動装着される
+pnpm install      # 依存導入（git hook は自動装着しない）
+pnpm hooks        # lefthook の git hook を装着（クローン後に一度だけ実行）
 pnpm test:watch   # TDD 中はこれを回す（Red→Green を即時確認）
 pnpm test         # 一回実行（vitest run）
 pnpm typecheck    # 型チェック（tsc --noEmit）

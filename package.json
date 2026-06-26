@@ -1,9 +1,18 @@
 {
   "name": "vitest-forall",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Vitest 上で ∀検証（Z3形式検証）を ∃検証（fast-check）と同じテストレイヤーに統合するライブラリ",
   "type": "module",
   "license": "MIT",
+  "author": "Sasaki Motoaki",
+  "homepage": "https://github.com/msasaki666/vitest-forall#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/msasaki666/vitest-forall.git"
+  },
+  "bugs": {
+    "url": "https://github.com/msasaki666/vitest-forall/issues"
+  },
   "keywords": [
     "vitest",
     "z3",
@@ -11,21 +20,35 @@
     "formal-verification",
     "property-testing"
   ],
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./core": "./src/core.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.js"
+    }
   },
   "files": [
-    "src"
+    "dist"
   ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
+    "build": "tsup",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "verify": "pnpm run typecheck && pnpm run test",
-    "prepare": "lefthook install"
+    "hooks": "lefthook install",
+    "prepack": "pnpm run build",
+    "prepublishOnly": "pnpm run verify"
   },
   "engines": {
     "node": ">=24"
@@ -45,6 +68,7 @@
   "devDependencies": {
     "@types/node": "^24.13.2",
     "lefthook": "^2.1.9",
+    "tsup": "^8.5.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
   }

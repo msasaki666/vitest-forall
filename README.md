@@ -6,6 +6,7 @@ Vitest 上で **∀検証（Z3 形式検証）** を **∃検証（fast-check）
 `vitest-forall` は「∀（あらゆる入力で成り立つ）」を Z3 で証明し、**それを Vitest のテストとして登録する**。
 `test`（∃）と `verify`（∀）が同一ランナー・同一レポート・同一台帳に並ぶ。
 
+> **使い方を順に学ぶなら [`docs/guide.md`](./docs/guide.md)（使い方ガイド）** を参照。
 > 設計の詳細は [`initial-design.md`](./initial-design.md)、開発方針は [`CLAUDE.md`](./CLAUDE.md) を参照。
 
 ## 仕組み
@@ -16,10 +17,25 @@ fast-check の ∃ 例示へ自動で降格する。
 
 ## インストール
 
+本パッケージはまだ npm 未公開です。**GitHub から直接インストール**できます
+（ビルド済み `dist/` をリポジトリに同梱しているため、追加のビルド手順は不要）。
+
 ```bash
+# 本体（依存の z3-solver / fast-check も自動で入る）
+pnpm add github:msasaki666/vitest-forall
+
+# verify() を使うなら Vitest も入れる（peerDependency・任意）
 pnpm add -D vitest
-pnpm add z3-solver fast-check
 ```
+
+特定のブランチ／タグを固定したい場合は `#<ref>` を付けます:
+
+```bash
+pnpm add github:msasaki666/vitest-forall#v0.1.0          # タグ
+pnpm add github:msasaki666/vitest-forall#<commit-sha>    # コミット固定（再現性◎）
+```
+
+> npm（`pnpm add z3-solver fast-check vitest-forall`）での配布は将来対応予定です。
 
 `vitest` は **peerDependency**（任意）です。`verify()` を使うには Vitest が必要ですが、
 純粋関数 `evaluate()` だけを使うなら Vitest なしでも動きます（下記「Vitest 非依存で使う」参照）。
@@ -173,7 +189,33 @@ const verdict = await evaluate({
 ## 開発
 
 ```bash
-pnpm install      # 依存導入 + git hook 装着
+pnpm install      # 依存導入（git hook は自動装着しない）
+pnpm hooks        # lefthook の git hook を装着（クローン後に一度だけ）
 pnpm test:watch   # TDD（Red→Green を即時確認）
 pnpm verify       # typecheck + test（pre-push と同じ）
+pnpm build        # dist/ に ESM(.js) + 型定義(.d.ts) を生成（tsup）
 ```
+
+> `prepare` スクリプトは置いていない。これは `pnpm add github:...` での導入時に pnpm が
+> 「ビルドが必要な git 依存」と誤認して `onlyBuiltDependencies` 許可を要求し、導入を妨げるのを
+> 避けるため（同梱 dist をそのまま使わせる）。hook 装着は `pnpm hooks` で明示的に行う。
+
+## 公開（メンテナ向け）
+
+npm へは `dist/`（ビルド成果物）のみを配布する。手順:
+
+```bash
+# 1. バージョンを更新（CHANGELOG.md も追記）
+npm version <patch|minor|major>   # package.json の version を更新しタグを打つ
+
+# 2. 公開（prepublishOnly で pnpm verify、prepack で pnpm build が自動実行される）
+npm publish
+
+# 公開前に中身を確認したいとき
+npm pack --dry-run                # tarball に含まれるファイル一覧を表示
+```
+
+- `prepublishOnly` が `pnpm verify`（typecheck + test）を、`prepack` が `pnpm build` を自動で走らせる。
+  **赤いまま publish されない**。
+- 配布物は `dist/` のみ（`files` フィールド）。`src/`・`test/`・`examples/` は含まれない。
+- エントリは `vitest-forall`（ルート）と `vitest-forall/core`（Vitest 非依存）の 2 つ。
