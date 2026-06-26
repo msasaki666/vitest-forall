@@ -189,11 +189,16 @@ const verdict = await evaluate({
 ## 開発
 
 ```bash
-pnpm install      # 依存導入 + git hook 装着
+pnpm install      # 依存導入（git hook は自動装着しない）
+pnpm hooks        # lefthook の git hook を装着（クローン後に一度だけ）
 pnpm test:watch   # TDD（Red→Green を即時確認）
 pnpm verify       # typecheck + test（pre-push と同じ）
 pnpm build        # dist/ に ESM(.js) + 型定義(.d.ts) を生成（tsup）
 ```
+
+> `prepare` スクリプトは置いていない。これは `pnpm add github:...` での導入時に pnpm が
+> 「ビルドが必要な git 依存」と誤認して `onlyBuiltDependencies` 許可を要求し、導入を妨げるのを
+> 避けるため（同梱 dist をそのまま使わせる）。hook 装着は `pnpm hooks` で明示的に行う。
 
 ## 公開（メンテナ向け）
 
