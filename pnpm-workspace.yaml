@@ -2,3 +2,4 @@
 # ここで設定する（旧 pnpm.onlyBuiltDependencies の移設先）。lefthook の git hook 装着に必要。
 allowBuilds:
   lefthook: true
+  esbuild: true # tsup（dist 生成）が依存する esbuild のネイティブバイナリ取得に必要

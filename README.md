@@ -177,4 +177,25 @@ const verdict = await evaluate({
 pnpm install      # 依存導入 + git hook 装着
 pnpm test:watch   # TDD（Red→Green を即時確認）
 pnpm verify       # typecheck + test（pre-push と同じ）
+pnpm build        # dist/ に ESM(.js) + 型定義(.d.ts) を生成（tsup）
 ```
+
+## 公開（メンテナ向け）
+
+npm へは `dist/`（ビルド成果物）のみを配布する。手順:
+
+```bash
+# 1. バージョンを更新（CHANGELOG.md も追記）
+npm version <patch|minor|major>   # package.json の version を更新しタグを打つ
+
+# 2. 公開（prepublishOnly で pnpm verify、prepack で pnpm build が自動実行される）
+npm publish
+
+# 公開前に中身を確認したいとき
+npm pack --dry-run                # tarball に含まれるファイル一覧を表示
+```
+
+- `prepublishOnly` が `pnpm verify`（typecheck + test）を、`prepack` が `pnpm build` を自動で走らせる。
+  **赤いまま publish されない**。
+- 配布物は `dist/` のみ（`files` フィールド）。`src/`・`test/`・`examples/` は含まれない。
+- エントリは `vitest-forall`（ルート）と `vitest-forall/core`（Vitest 非依存）の 2 つ。
