@@ -6,6 +6,7 @@ Vitest 上で **∀検証（Z3 形式検証）** を **∃検証（fast-check）
 `vitest-forall` は「∀（あらゆる入力で成り立つ）」を Z3 で証明し、**それを Vitest のテストとして登録する**。
 `test`（∃）と `verify`（∀）が同一ランナー・同一レポート・同一台帳に並ぶ。
 
+> **使い方を順に学ぶなら [`docs/guide.md`](./docs/guide.md)（使い方ガイド）** を参照。
 > 設計の詳細は [`initial-design.md`](./initial-design.md)、開発方針は [`CLAUDE.md`](./CLAUDE.md) を参照。
 
 ## 仕組み
