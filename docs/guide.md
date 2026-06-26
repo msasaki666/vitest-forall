@@ -19,12 +19,16 @@
 ### インストール
 
 ```bash
+# 本体（まだ npm 未公開のため GitHub から。依存の z3-solver / fast-check も自動で入る）
+pnpm add github:msasaki666/vitest-forall
+
+# verify() を使うなら Vitest も入れる（peerDependency・任意）
 pnpm add -D vitest
-pnpm add z3-solver fast-check
 ```
 
 `vitest` は **peerDependency（任意）** です。`verify()` を使うときだけ必要で、純粋関数
 `evaluate()` だけなら Vitest なしでも動きます（→ [7. Vitest 非依存で使う](#7-vitest-非依存で使うcore-サブパス)）。
+インストールの詳細（ブランチ/タグ固定など）は [README](../README.md#インストール) を参照。
 
 > Node 24 以上が必要です（`z3-solver` の WASM が依存）。
 
@@ -43,6 +47,7 @@ export function withdraw(balance: number, amount: number): number {
 ```ts
 import { test, expect } from 'vitest';
 import { verify, forall, and, ge, le, sub, implies } from 'vitest-forall';
+import { withdraw } from './wallet'; // 上で定義した検証対象
 
 // ∃: この具体例で動く
 test('withdraw: 100 から 30 引くと 70', () => {
