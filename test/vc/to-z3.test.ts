@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { evaluate } from '../../src/core';
+import { int } from '../../src/arbitraries';
 import { getZ3Context } from '../../src/z3-context';
 import {
   add,
@@ -111,5 +112,50 @@ describe('forall: ∀ DSL から VerifySpec を組む', () => {
     const spec = forall({ a: 'int' }, ({ a }) => gt(a, 0));
     const v = await evaluate(spec);
     expect(v.status).toBe('refuted');
+  });
+
+  test('非線形だが成立する性質は fallback-passed（自動 ∃ 降格）', async () => {
+    // ∀ a,b:int. (a≥0 ∧ b≥0) → a*b ≥ 0。変数同士の積で Z3 は unknown。
+    // fallback 未指定でも IR から ∃ 検証が自動合成され、反例なしで fallback-passed。
+    const spec = forall({ a: 'int', b: 'int' }, ({ a, b }) =>
+      implies(and(ge(a, 0), ge(b, 0)), ge(mul(a, b), 0)),
+    );
+    const v = await evaluate(spec);
+    expect(v.status).toBe('fallback-passed');
+  });
+
+  test('非線形で成立しない性質は fallback で反例を見つけ refuted', async () => {
+    // ∀ a,b:int. a*b ≥ 0 は偽（a=1, b=-1）。Z3 は unknown → 自動 ∃ 降格が反例を検出。
+    const spec = forall({ a: 'int', b: 'int' }, ({ a, b }) => ge(mul(a, b), 0));
+    const v = await evaluate(spec);
+    expect(v.status).toBe('refuted');
+  });
+
+  test('矛盾した前件を持つ非線形 forall は例外を投げず fallback-passed（空虚に真）', async () => {
+    // implies(5≤a≤3, a*b≥0)。前件が充足不能なので性質は空虚に真。
+    // 推論が空区間を作っても forall 構築時に fc が例外で落ちず、∃ 降格で fallback-passed。
+    const spec = forall({ a: 'int', b: 'int' }, ({ a, b }) =>
+      implies(and(ge(a, 5), le(a, 3)), ge(mul(a, b), 0)),
+    );
+    const v = await evaluate(spec);
+    expect(v.status).toBe('fallback-passed');
+  });
+
+  test('int 変数の端数前件を持つ非線形 forall も例外なく fallback-passed', async () => {
+    // implies(a≥0.5 ∧ b≥0, a*b≥0)。端数下限 0.5 を整数ドメインへ丸めて fc.integer の例外を避ける。
+    const spec = forall({ a: 'int', b: 'int' }, ({ a, b }) =>
+      implies(and(ge(a, 0.5), ge(b, 0)), ge(mul(a, b), 0)),
+    );
+    const v = await evaluate(spec);
+    expect(v.status).toBe('fallback-passed');
+  });
+
+  test('明示した fallback は自動合成より優先される', async () => {
+    // 自動合成なら反例が出る性質でも、利用者が prop:()=>true の fallback を渡せばそれを使う。
+    const spec = forall({ a: 'int', b: 'int' }, ({ a, b }) => ge(mul(a, b), 0), {
+      fallback: { arb: [int()], prop: () => true },
+    });
+    const v = await evaluate(spec);
+    expect(v.status).toBe('fallback-passed');
   });
 });

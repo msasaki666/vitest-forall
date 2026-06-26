@@ -97,7 +97,25 @@ verify(
 コンビネータ: 変数 `intVar` / `realVar`、算術 `add` / `sub` / `mul`（定数倍のみ）/ `neg`、
 比較 `lt` / `le` / `gt` / `ge` / `eq` / `ne`、論理 `and` / `or` / `not` / `implies`。
 項位置の数値はリテラルへ自動昇格します（`add(balance, 100)`）。
-**変数同士の積**は線形算術の対象外で、`unknown` 扱い → fast-check へ降格します（`fallback` 指定時）。
+
+### 非線形は自動で ∃ へ降格する
+
+**変数同士の積**などは線形算術の対象外で Z3 は `unknown` を返します。`forall` で書いた性質は、
+`fallback` を明示しなくても **IR から fast-check の ∃ 検証を自動合成**して降格します。`implies` の
+前件（事前条件）に書いた範囲（`ge` / `le` / `eq` / `ne`）は生成する arbitrary にも反映され、探索が
+前件領域に集中します。明示的に `fallback` を渡した場合は、そちらが自動合成より優先されます。
+
+```ts
+import { verify, forall, and, ge, mul, implies } from 'vitest-forall';
+
+// ∀ x, y: int. (x≥0 ∧ y≥0) → x*y ≥ 0 ── x*y は非線形 → Z3 unknown → 自動で fast-check へ降格
+verify(
+  '非負どうしの積は非負',
+  forall({ x: 'int', y: 'int' }, ({ x, y }) =>
+    implies(and(ge(x, 0), ge(y, 0)), ge(mul(x, y), 0)),
+  ),
+);
+```
 
 ## API
 
@@ -105,8 +123,9 @@ verify(
 |---|---|
 | `verify(name, spec)` | `spec` を Z3 で検証し Vitest の `test` として登録する薄い殻 |
 | `evaluate(spec)` | ★純粋関数。判定を `Verdict` 値で返す。Vitest 非依存（テストの核） |
-| `forall(decls, predicate, opts?)` | 述語 DSL で性質を書き `VerifySpec` を組む（否定は内部で行う） |
+| `forall(decls, predicate, opts?)` | 述語 DSL で性質を書き `VerifySpec` を組む（否定は内部で行う。`unknown` 時は fast-check へ自動降格） |
 | `int({ ge, le, ne })` / `real(...)` | fallback 用の制約付き fast-check arbitrary |
+| `DEFAULT_TIMEOUT_MS` | `timeout` 未指定時に使う既定の Z3 タイムアウト（`10_000` ms） |
 
 ### `VerifySpec`
 
@@ -114,7 +133,7 @@ verify(
 |---|---|---|
 | `negation` | `(z) => Bool` | 性質の **否定**。UNSAT なら ∀ 成立 |
 | `fallback?` | `{ arb, prop }` | `unknown` 時に走らせる fast-check の ∃ 検証 |
-| `timeout?` | `number` | Z3 タイムアウト(ms)。CI 安定化に推奨 |
+| `timeout?` | `number` | Z3 タイムアウト(ms)。未指定でも既定 `10_000` ms が効く（ハング防止）。CI では対象に応じて調整 |
 
 ### `Verdict`（`evaluate` の戻り値）
 
@@ -123,7 +142,7 @@ verify(
 | `proved` | ¬P が UNSAT → ∀ 成立 |
 | `refuted` | SAT / ∃ 失敗 → `counterexample` あり |
 | `fallback-passed` | unknown → fast-check で例示 OK |
-| `error` | unknown かつ `fallback` 未指定 |
+| `error` | unknown かつ `fallback` 未指定（`forall` は変数があれば自動合成するので通常ここに落ちない） |
 
 ## Vitest 非依存で使う（`/core` サブパス）
 
@@ -148,7 +167,8 @@ const verdict = await evaluate({
 - **得意**: 線形算術・整数/実数・比較・論理結合。
 - **苦手（→ `unknown` で fast-check へ降格）**: 非線形（変数同士の乗算）・複雑な文字列制約・ループ。
 - **数値**: JS の `number` は IEEE double。`forall` のリテラルは整数/実数のソートに合わせて生成する。
-- **タイムアウト**: Z3 は最悪ケースで指数的に遅い。`timeout` の設定を推奨。
+- **自動 ∃ 降格時の算術**: 整数のみの式は **BigInt で厳密評価**する（`number` の `2^53` 桁落ちで恒真な整数法則を誤って `refuted` にしないため）。一方、実数・整数混在の式は `number` 近似で評価するため、Z3 の厳密な有理数演算と稀に食い違う可能性がある（厳密な実数評価はスコープ外）。
+- **タイムアウト**: Z3 は最悪ケースで指数的に遅い。既定で `10_000` ms（`DEFAULT_TIMEOUT_MS`）が効き、超過すると `unknown` 扱いで fast-check へ降格する。重い検証は `timeout` で調整。
 
 ## 開発
 

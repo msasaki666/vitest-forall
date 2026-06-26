@@ -47,7 +47,10 @@ export async function evaluate<T extends ArbitraryTuple = ArbitraryTuple>(
 
   // 式構築〜check〜model 取得までを 1 つの try に収める。
   // どこで失敗しても「判定不能（unknown）」へ畳み、握り潰さず後段で扱う。
+  // 例外の原因は捨てず保持し、fallback 無しで error に落ちる際に reason へ載せる
+  // （NonlinearError と OOM・typo を区別できるよう、診断情報を消さない）。
   let outcome: { result: CheckSatResult; counterexample?: string };
+  let cause: unknown;
   try {
     const solver = new z.Solver();
     solver.set('timeout', spec.timeout ?? DEFAULT_TIMEOUT_MS);
@@ -57,7 +60,8 @@ export async function evaluate<T extends ArbitraryTuple = ArbitraryTuple>(
       result,
       counterexample: result === 'sat' ? formatModel(solver.model()) : undefined,
     };
-  } catch {
+  } catch (e) {
+    cause = e;
     outcome = { result: 'unknown' };
   }
 
@@ -70,8 +74,16 @@ export async function evaluate<T extends ArbitraryTuple = ArbitraryTuple>(
   if (spec.fallback !== undefined) return runFallback(spec.fallback);
   return {
     status: 'error',
-    reason: 'Z3 が unknown を返したが fallback が未指定（∃ 検証で埋められない）',
+    reason:
+      cause !== undefined
+        ? `Z3 で判定できず fallback も未指定（原因: ${describeCause(cause)}）`
+        : 'Z3 が unknown を返したが fallback が未指定（∃ 検証で埋められない）',
   };
+}
+
+// 捕捉した例外を reason 用の文字列へ。Error はメッセージを、それ以外は文字列化する。
+function describeCause(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
 }
 
 // model は SMTLIB 形式（"(define-fun balance () Int\n  0)..."）。
