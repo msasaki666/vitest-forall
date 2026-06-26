@@ -11,7 +11,7 @@
 // 取りこぼす。よって確実に落とせない前件は推論せず全域生成に委ねる（握り潰さず、ただ無制約にする）。
 import type { Fallback } from '../core';
 import { int, type NumericConstraints, real } from '../arbitraries';
-import { evalFormula } from './eval';
+import { evalFormula, evalFormulaInt, isIntegerFormula } from './eval';
 import type { CmpOp, Formula, Term, VarDecls } from './parser';
 
 // 変数名 → 推論した数値制約。前件に現れなかった変数は欠落（＝全域生成）。
@@ -55,6 +55,10 @@ export function buildAutoFallback(decls: VarDecls, property: Formula): Fallback 
     return sort === 'real' ? real(c) : int(c);
   });
 
+  // 整数のみの式は BigInt で厳密評価する。number だと 2^53 超の積で桁落ちし、恒真な整数法則でも
+  // 偽の反例を生む（Codex P2 指摘）。実数・混在式は number 近似（厳密評価は有理数演算が要り対象外）。
+  const evaluator = isIntegerFormula(property) ? evalFormulaInt : evalFormula;
+
   // fast-check が生成した値タプルを名前付き環境へ束ね、IR を評価して真偽を返す。
   // 反例（false）が出れば evaluate 側が refuted に畳む。
   const prop = (...values: number[]): boolean => {
@@ -66,7 +70,7 @@ export function buildAutoFallback(decls: VarDecls, property: Formula): Fallback 
       if (value === undefined) throw new Error(`fallback prop の引数 ${name} が不足している`);
       env[name] = value;
     });
-    return evalFormula(property, env);
+    return evaluator(property, env);
   };
 
   // 非空タプルであることは entries.length>0 で保証済み。fast-check の厳密タプル型へは

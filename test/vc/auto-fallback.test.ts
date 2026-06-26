@@ -154,4 +154,19 @@ describe('堅牢性: プロトタイプ汚染と充足不能区間', () => {
     expect(inferConstraints(property)['a']).toBeUndefined();
     expect(() => buildAutoFallback({ a: 'int' }, property)).not.toThrow();
   });
+
+  test('整数式は厳密演算で評価する（桁あふれで偽の反例を出さない / Codex P2）', () => {
+    // (a*b)*c == a*(b*c) は整数で恒真。だが 32bit 値の積は 2^53 を超え number では桁落ちし、
+    // Z3 の無限精度整数と食い違って「偽の反例」になる。BigInt で厳密評価して防ぐ。
+    const a = intVar('a');
+    const b = intVar('b');
+    const c = intVar('c');
+    const assoc = eq(mul(mul(a, b), c), mul(a, mul(b, c)));
+    const fallback = buildAutoFallback({ a: 'int', b: 'int', c: 'int' }, assoc);
+    expect(fallback).toBeDefined();
+    if (!fallback) return;
+    const prop = fallback.prop as (...xs: number[]) => boolean;
+    // Codex が挙げた具体反例。number 評価だと false（偽の反例）になる。
+    expect(prop(-1585091834, 727911282, -600332116)).toBe(true);
+  });
 });
