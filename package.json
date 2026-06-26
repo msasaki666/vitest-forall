@@ -46,7 +46,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "verify": "pnpm run typecheck && pnpm run test",
-    "prepare": "lefthook install",
+    "prepare": "lefthook install || true",
     "prepack": "pnpm run build",
     "prepublishOnly": "pnpm run verify"
   },

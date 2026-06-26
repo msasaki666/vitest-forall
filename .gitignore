@@ -1,5 +1,6 @@
 node_modules/
-dist/
+# dist/ は GitHub ソースインストール（pnpm add github:...）を成立させるためコミットする。
+# npm 公開へ移行したら gitignore へ戻してよい。
 coverage/
 *.log
 .DS_Store

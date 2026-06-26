@@ -17,10 +17,25 @@ fast-check の ∃ 例示へ自動で降格する。
 
 ## インストール
 
+本パッケージはまだ npm 未公開です。**GitHub から直接インストール**できます
+（ビルド済み `dist/` をリポジトリに同梱しているため、追加のビルド手順は不要）。
+
 ```bash
+# 本体（依存の z3-solver / fast-check も自動で入る）
+pnpm add github:msasaki666/vitest-forall
+
+# verify() を使うなら Vitest も入れる（peerDependency・任意）
 pnpm add -D vitest
-pnpm add z3-solver fast-check
 ```
+
+特定のブランチ／タグを固定したい場合は `#<ref>` を付けます:
+
+```bash
+pnpm add github:msasaki666/vitest-forall#v0.1.0          # タグ
+pnpm add github:msasaki666/vitest-forall#<commit-sha>    # コミット固定（再現性◎）
+```
+
+> npm（`pnpm add z3-solver fast-check vitest-forall`）での配布は将来対応予定です。
 
 `vitest` は **peerDependency**（任意）です。`verify()` を使うには Vitest が必要ですが、
 純粋関数 `evaluate()` だけを使うなら Vitest なしでも動きます（下記「Vitest 非依存で使う」参照）。
