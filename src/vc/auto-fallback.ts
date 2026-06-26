@@ -31,7 +31,9 @@ export function inferConstraints(property: Formula): InferredConstraints {
   if (property.kind !== 'implies') return acc;
   for (const atom of flattenAnd(property.ante)) {
     const bound = atomBound(atom);
-    if (bound) mergeBound(acc, bound);
+    // 局所の null プロトタイプ蓄積器への畳み込み（外へ漏れる前の純粋なローカル可変）。
+    // 値の合成自体は純粋関数 mergeOne に委ね、破壊変更や delete を持ち込まない。
+    if (bound) acc[bound.name] = mergeOne(acc[bound.name] ?? {}, bound);
   }
   // 充足不能な区間（下限>上限、単一点を ne で除外）は前件が偽 → 性質は空虚に真。
   // 制約を落として全域生成へ戻す（空の arbitrary を作って fc を例外で落とさないため）。
@@ -176,18 +178,25 @@ function constValue(term: Term): number | undefined {
   }
 }
 
-// 同じ変数の複数境界を区間の交わりへ集約する: 下限は max、上限は min。
-// ne は単一フィールドしか持てないので、競合（別値）が来たら安全側に倒して落とす（無制約化）。
-function mergeBound(acc: Record<string, NumericConstraints>, b: Bound): void {
-  const cur = acc[b.name] ?? {};
-  const next: NumericConstraints = { ...cur };
-  if (b.ge !== undefined) next.ge = cur.ge === undefined ? b.ge : Math.max(cur.ge, b.ge);
-  if (b.le !== undefined) next.le = cur.le === undefined ? b.le : Math.min(cur.le, b.le);
-  if (b.ne !== undefined) {
-    if (cur.ne === undefined) next.ne = b.ne;
-    else if (cur.ne !== b.ne) delete next.ne; // 競合する除外値は表現できない → 落とす（安全側）
-  }
-  acc[b.name] = next;
+// 同じ変数の 2 つの境界を区間の交わりへ集約する純粋関数: 下限は max、上限は min。
+// ne は単一フィールドしか持てないので、競合（別値）が来たら表現できず落とす（安全側＝無制約化）。
+// undefined のフィールドは載せず {} を保つ（{ ge: undefined } のような穴あきを作らない）。
+function mergeOne(cur: NumericConstraints, b: Bound): NumericConstraints {
+  const ge = b.ge === undefined ? cur.ge : cur.ge === undefined ? b.ge : Math.max(cur.ge, b.ge);
+  const le = b.le === undefined ? cur.le : cur.le === undefined ? b.le : Math.min(cur.le, b.le);
+  const ne =
+    b.ne === undefined
+      ? cur.ne
+      : cur.ne === undefined
+        ? b.ne
+        : cur.ne === b.ne
+          ? cur.ne
+          : undefined; // 競合する除外値は表現できない → 落とす（安全側）
+  return {
+    ...(ge !== undefined ? { ge } : {}),
+    ...(le !== undefined ? { le } : {}),
+    ...(ne !== undefined ? { ne } : {}),
+  };
 }
 
 // 生成可能値がゼロになる（充足不能な）区間か。下限>上限、または単一点をその点の ne で除外した形。

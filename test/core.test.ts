@@ -53,6 +53,18 @@ describe('evaluate: ∀検証エンジンの判定（全分岐網羅）', () => 
     expect(v.status).toBe('error');
   });
 
+  test('unknown が例外由来なら error の reason に原因を含める（バグを握り潰さない）', async () => {
+    // 式構築の例外（typo・OOM 等）が unknown に畳まれると原因が消えていた。
+    // fallback 未指定で error に落ちるとき、捕捉した原因を reason に載せて診断可能にする。
+    const v = await evaluate({
+      negation: () => {
+        throw new Error('独自ビルドエラーXYZ');
+      },
+    });
+    expect(v.status).toBe('error');
+    if (v.status === 'error') expect(v.reason).toContain('独自ビルドエラーXYZ');
+  });
+
   test('unknown かつ fallback の prop が偽 → refuted（∃側の反例検出）', async () => {
     const v = await evaluate({
       negation: () => {
