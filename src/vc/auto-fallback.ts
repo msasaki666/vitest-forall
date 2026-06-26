@@ -52,7 +52,8 @@ export function buildAutoFallback(decls: VarDecls, property: Formula): Fallback 
   const constraints = inferConstraints(property);
   const arbitraries = entries.map(([name, sort]) => {
     const c = constraints[name] ?? {};
-    return sort === 'real' ? real(c) : int(c);
+    // int 変数は整数ドメインへ正規化してから arbitrary を作る（fc.integer は整数 min/max のみ）。
+    return sort === 'real' ? real(c) : int(toIntegerDomain(c));
   });
 
   // 整数のみの式は BigInt で厳密評価する。number だと 2^53 超の積で桁落ちし、恒真な整数法則でも
@@ -211,4 +212,23 @@ function isUnsatisfiable(c: NumericConstraints): boolean {
     if (c.ge === c.le && c.ne === c.ge) return true; // 単一点が除外されている → 空
   }
   return false;
+}
+
+// int 変数の制約を整数ドメインへ正規化する。fc.integer は整数の min/max しか受け付けないため、
+// 端数の下限は ceil（含む下限）、上限は floor（含む上限）へ丸める。整数解の集合は変わらない
+// （a≥0.5 ⇔ 整数 a≥1、a≤0.9 ⇔ 整数 a≤0）ので厳密。整数を 1 つも除外しない端数 ne は落とす。
+// 丸めた結果が整数上で空区間になれば前件は充足不能 → 全制約を落として全域生成へ戻す（空虚に真）。
+function toIntegerDomain(c: NumericConstraints): NumericConstraints {
+  const ge = c.ge === undefined ? undefined : Math.ceil(c.ge);
+  const le = c.le === undefined ? undefined : Math.floor(c.le);
+  const ne = c.ne !== undefined && Number.isInteger(c.ne) ? c.ne : undefined;
+  if (ge !== undefined && le !== undefined) {
+    if (ge > le) return {}; // 整数解なし → 無制約（全域）へ
+    if (ge === le && ne === ge) return {}; // 単一点が除外されている → 無制約へ
+  }
+  return {
+    ...(ge !== undefined ? { ge } : {}),
+    ...(le !== undefined ? { le } : {}),
+    ...(ne !== undefined ? { ne } : {}),
+  };
 }

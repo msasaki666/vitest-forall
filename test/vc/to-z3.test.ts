@@ -141,6 +141,15 @@ describe('forall: ∀ DSL から VerifySpec を組む', () => {
     expect(v.status).toBe('fallback-passed');
   });
 
+  test('int 変数の端数前件を持つ非線形 forall も例外なく fallback-passed', async () => {
+    // implies(a≥0.5 ∧ b≥0, a*b≥0)。端数下限 0.5 を整数ドメインへ丸めて fc.integer の例外を避ける。
+    const spec = forall({ a: 'int', b: 'int' }, ({ a, b }) =>
+      implies(and(ge(a, 0.5), ge(b, 0)), ge(mul(a, b), 0)),
+    );
+    const v = await evaluate(spec);
+    expect(v.status).toBe('fallback-passed');
+  });
+
   test('明示した fallback は自動合成より優先される', async () => {
     // 自動合成なら反例が出る性質でも、利用者が prop:()=>true の fallback を渡せばそれを使う。
     const spec = forall({ a: 'int', b: 'int' }, ({ a, b }) => ge(mul(a, b), 0), {

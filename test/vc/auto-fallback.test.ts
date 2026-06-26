@@ -155,6 +155,25 @@ describe('堅牢性: プロトタイプ汚染と充足不能区間', () => {
     expect(() => buildAutoFallback({ a: 'int' }, property)).not.toThrow();
   });
 
+  test('int 変数の端数下限は整数ドメインへ丸める（fc.integer の例外回避 / Codex P2 第2弾）', () => {
+    // ge(a, 0.5) をそのまま int(c) に渡すと fc.integer が min=0.5 で例外。ceil で整数化する。
+    // a≥0.5 ⇔ 整数 a≥1 なので ceil は整数解集合を変えない（厳密）。
+    const a = intVar('a');
+    const property = implies(ge(a, 0.5), gt(a, -100));
+    expect(() => buildAutoFallback({ a: 'int' }, property)).not.toThrow();
+    const fallback = buildAutoFallback({ a: 'int' }, property);
+    if (!fallback) return;
+    fc.assert(
+      fc.property(fallback.arb[0], (v) => Number.isInteger(v as number) && (v as number) >= 1),
+    );
+  });
+
+  test('整数解が無い端数区間は落として全域生成（0.1<a<0.9 は整数上で充足不能）', () => {
+    const a = intVar('a');
+    const property = implies(and(gt(a, 0.1), lt(a, 0.9)), gt(a, -100));
+    expect(() => buildAutoFallback({ a: 'int' }, property)).not.toThrow();
+  });
+
   test('整数式は厳密演算で評価する（桁あふれで偽の反例を出さない / Codex P2）', () => {
     // (a*b)*c == a*(b*c) は整数で恒真。だが 32bit 値の積は 2^53 を超え number では桁落ちし、
     // Z3 の無限精度整数と食い違って「偽の反例」になる。BigInt で厳密評価して防ぐ。
